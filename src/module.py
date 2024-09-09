@@ -32,8 +32,8 @@ class NextSentencePrediction(nn.Module):
     def forward(self, input):
         """
         ** shape **
-        input - N, 1, H => these are hidden values which was position cls tokens..
-        output - N, 1, 2
+        input - N, H => these are hidden values which was position cls tokens..
+        output - N, 2
         """
         nsp_predict = self.cls_project_layer(input)
         return nsp_predict # -> input of the CE
