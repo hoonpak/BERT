@@ -119,7 +119,7 @@ def generate_processed_sentence(total_dataset, tokenizer, write_file):
                         is_random_next = True
                         target_b_length = max(1, target_seq_length - len(tokens_a))
                         
-                        for _ in range(10000000):
+                        for _ in range(1000000):
                             random_document_index = random.randint(0, num_total_documents-1)
                             if random_document_index != doc_idx:
                                 random_doc = total_dataset[random_document_index]['text']
