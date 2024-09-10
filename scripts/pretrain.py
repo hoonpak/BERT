@@ -1,8 +1,9 @@
 import sys
 sys.path.append("../src")
 import argparse
+import time
 
-from config import small_config, tiny_config
+from config import *
 from tokenizers import Tokenizer
 from data import CustomDataset
 from model import PretrainingBERT
@@ -20,11 +21,15 @@ parser.add_argument("--device", default="cuda:0")
 parser.add_argument("--version")
 option = parser.parse_args()
 
+device = option.device
+
 config_dict = tiny_config
 if option.model == "small":
     config_dict = small_config
 
 current_name = option.model + "_" + option.version
+
+print(f"{current_name} READY !!!")
 
 step_batch_size = 256
 num_total_steps = 1000000
@@ -32,16 +37,92 @@ num_total_steps = 1000000
 tokenizer_file_path = "../dataset/BERT_Tokenizer.json"
 tokenizer = Tokenizer.from_file(tokenizer_file_path)
 vocab_size = tokenizer.get_vocab_size()
-assert vocab_size == config_dict['vocab_size']
+assert (vocab_size+1) == config_dict['vocab_size']
 
-pretraining_dataset_file_path = "pretraining_ttest.json"
+pretraining_dataset_file_path = "../dataset/example_pretraining.json"
 pretraining_dataset = CustomDataset(pretraining_dataset_file_path, 1, 0, config_dict['pad_idx'])
-batch_size = 64
+batch_size = 256
 train_dataloader = DataLoader(pretraining_dataset, batch_size)
 
-model = PretrainingBERT(config_dict)
-nsp_loss_function = torch.nn.CrossEntropyLoss()
-mlm_loss_function = torch.nn.CrossEntropyLoss(ignore_index=config_dict['pad_idx'])
+model = PretrainingBERT(config_dict).to(device)
+nsp_loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
+mlm_loss_function = torch.nn.CrossEntropyLoss(ignore_index=config_dict['pad_idx'], reduction='sum').to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=1, betas=(0.9,0.999), weight_decay=0.01)
 lr_update = LambdaLR(optimizer=optimizer, lr_lambda=lambda step: lrate(step, config_dict['dim_model'], 10000))
 
+writer = SummaryWriter(log_dir=f"./runs/{current_name}")
+st_time = time.time()
+epoch = 0
+step = 0
+iteration = 0
+flag_batch_num = 0
+train_total_loss = 0
+train_nsp_loss = 0
+train_mlm_loss = 0
+train_stop_flag = False
+
+while True:
+    epoch += 1
+    for tokens, segment_ids, position_ids, is_next, masked_lm_positions, masked_lm_labels in train_dataloader:
+        flag_batch_num += batch_size
+        
+        tokens = tokens.to(device)
+        segment_ids = segment_ids.to(device)
+        position_ids = position_ids.to(device)
+        is_next = is_next.to(device)
+        masked_lm_positions = masked_lm_positions.to(device)
+        masked_lm_labels = masked_lm_labels.to(device)
+        
+        model.train()
+        nsp_predict, mlm_predict = model.forward(tokens, segment_ids, position_ids, masked_lm_positions)
+        nsp_loss = nsp_loss_function(nsp_predict, is_next)
+        mlm_loss = mlm_loss_function(mlm_predict, masked_lm_labels.reshape(-1))
+        total_loss = nsp_loss + mlm_loss
+        total_loss.backward()
+        iteration += 1
+        train_nsp_loss += nsp_loss.detach().cpu().item()
+        train_mlm_loss += mlm_loss.detach().cpu().item()
+        train_total_loss += total_loss.detach().cpu().item()
+        
+        if flag_batch_num == step_batch_size:
+            flag_batch_num = 0
+            optimizer.step()
+            lr_update.step()
+            optimizer.zero_grad()
+            step += 1
+            
+            if step % 100 == 0:
+                train_nsp_loss /= iteration
+                train_mlm_loss /= iteration
+                train_total_loss /= iteration
+                iteration = 0
+                print(f"Step: {epoch}/{step:<8} lr: {optimizer.param_groups[0]['lr']:<9.1e} Train NSP Loss: {train_nsp_loss:<8.4f} Train MLM Loss: {train_mlm_loss:<12.4f} Train Loss: {train_total_loss:<8.4f} Time:{(time.time()-st_time)/3600:>6.4f} Hour")
+                writer.add_scalars("nsp", {"nsp_loss":train_nsp_loss}, step)
+                writer.add_scalars("mlm", {"mlm_loss":train_mlm_loss}, step)
+                writer.add_scalars("total", {"total_loss":train_total_loss}, step)
+                writer.flush()
+                train_nsp_loss = 0
+                train_mlm_loss = 0
+                train_total_loss = 0
+                
+            if step == num_total_steps:
+                train_stop_flag = True
+                break
+            
+        if step % 10000 == 0:
+            torch.save({'step': step,
+                        'model': model,
+                        'model_state_dict': model.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        }, f"./save_model/{current_name}_CheckPoint.pth")
+    if train_stop_flag:
+        torch.save({'step': step,
+                    'model': model,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    }, f"./save_model/{current_name}_CheckPoint.pth")
+        break
+    
+print("="*50, sep="")
+print("TRAINING FINISH", sep="")
+print("="*50, sep="")

@@ -18,6 +18,8 @@ class PretrainingBERT(nn.Module):
     def forward(self, batched_tokens, batched_segments, batched_positions, mlm_position):
         bert_output, pooled_output = self.bert_layer(batched_tokens, batched_segments, batched_positions)
         N, S = mlm_position.shape
+        # print(bert_output.shape)
+        # print(mlm_position)
         mlm_input = bert_output[torch.arange(N).unsqueeze(-1), mlm_position]
         nsp_output = self.nsp_classifier(pooled_output)
         mlm_output = self.mlm_classifier(mlm_input)

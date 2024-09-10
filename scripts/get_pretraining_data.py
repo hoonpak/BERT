@@ -60,7 +60,7 @@ def create_masked_lm_prediction(tokens, masked_lm_prob, max_predictions_per_seq,
                 if random.random() < 0.5:
                     masked_token = tokens[index]
                 else:
-                    masked_token = random.randint(0, small_config["vocab_size"])
+                    masked_token = random.randint(0, small_config["vocab_size"]-1)
             output_tokens[index] = masked_token
             masked_lms.append([index, tokens[index]])
     assert len(masked_lms) <= num_to_predict
@@ -140,30 +140,6 @@ def generate_processed_sentence(total_dataset, tokenizer, write_file):
                         for j in range(a_end, len(current_chunk)):
                             tokens_b.extend(current_chunk[j])
                     truncated_seq_pair(tokens_a, tokens_b, max_num_tokens)
-                    
-                    if len(tokens_b) < 1:
-                        print(target_seq_length)
-                        print(len(current_chunk))
-                        print(len(tokens_a))
-                        print(len(tokens_b))
-                        is_random_next = True
-                        target_b_length = max(1, target_seq_length - len(tokens_a))
-                        
-                        for _ in range(1000):
-                            random_document_index = random.randint(0, num_total_documents-1)
-                            if random_document_index != doc_idx:
-                                random_doc = total_dataset[random_document_index]['text']
-                                random_doc = random_doc.split("\n")
-                                if len(random_doc) > 10:
-                                    break
-                        
-                        random_start = random.randint(0, len(random_doc)-5)
-                        for j in range(random_start, len(random_doc)):
-                            random_doc_sen_ids = tokenizer.encode(random_doc[j]).ids
-                            tokens_b.extend(random_doc_sen_ids)
-                            if len(tokens_b) > target_b_length:
-                                break
-                        truncated_seq_pair(tokens_a, tokens_b, max_num_tokens)
                     
                     # print("="*100)
                     # print(len(current_chunk))
