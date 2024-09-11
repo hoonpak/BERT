@@ -13,9 +13,9 @@ class BERT(nn.Module):
         self.tanh = nn.Tanh()
         self.padding_idx = config['pad_idx']
         
-    def forward(self, batched_tokens, batched_segments, batched_positions):
+    def forward(self, batched_tokens, batched_segments):
         mask_info = (batched_tokens == self.padding_idx) # padding got True value, so it ignore during computing attention.
-        x = self.embedding_layer(batched_tokens, batched_segments, batched_positions)
+        x = self.embedding_layer(batched_tokens, batched_segments)
         for enc_layer in self.encoder_layers:
             x = enc_layer.forward(input=x, mask_info=mask_info)
         pooled_output = self.tanh(self.pooling_layer(x[:,0,:]))

@@ -15,8 +15,8 @@ class PretrainingBERT(nn.Module):
         self.nsp_classifier = NextSentencePrediction(config=config)
         self.mlm_classifier = MaskedLanguageModeling(config=config, sharing_embedding=sharing_embedding)
 
-    def forward(self, batched_tokens, batched_segments, batched_positions, mlm_position):
-        bert_output, pooled_output = self.bert_layer(batched_tokens, batched_segments, batched_positions)
+    def forward(self, batched_tokens, batched_segments, mlm_position):
+        bert_output, pooled_output = self.bert_layer(batched_tokens, batched_segments)
         N, S = mlm_position.shape
         # print(bert_output.shape)
         # print(mlm_position)
@@ -24,3 +24,5 @@ class PretrainingBERT(nn.Module):
         nsp_output = self.nsp_classifier(pooled_output)
         mlm_output = self.mlm_classifier(mlm_input)
         return nsp_output, mlm_output
+    
+# class 

@@ -57,9 +57,9 @@ class CustomDataset(IterableDataset):
         real_sen_token_num = len(tokens)
         pad_mul_num = 128 - real_sen_token_num
         
-        position_ids = torch.arange(real_sen_token_num)
-        pad_dim = (0, pad_mul_num)
-        position_ids = torch.nn.functional.pad(position_ids, pad_dim, "constant", 128)
+        # position_ids = torch.arange(real_sen_token_num)
+        # pad_dim = (0, pad_mul_num)
+        # position_ids = torch.nn.functional.pad(position_ids, pad_dim, "constant", 128)
         
         tokens = tokens + [self.pad_idx]*pad_mul_num
         segment_ids = segment_ids + [2]*pad_mul_num
@@ -72,5 +72,7 @@ class CustomDataset(IterableDataset):
         if is_random_next:
             is_next = 0
         
-        return [torch.LongTensor(tokens), torch.LongTensor(segment_ids), torch.LongTensor(position_ids),
-                is_next, torch.LongTensor(masked_lm_positions), torch.LongTensor(masked_lm_labels)]
+        return [torch.LongTensor(tokens), torch.LongTensor(segment_ids), is_next,
+                torch.LongTensor(masked_lm_positions), torch.LongTensor(masked_lm_labels)]
+        
+#torch.LongTensor(position_ids),

@@ -92,7 +92,7 @@ def generate_processed_sentence(total_dataset, tokenizer, write_file):
         max_num_tokens = 128 - 3
         target_seq_length = max_num_tokens
         if (random.random() < 0.1) and (num_doc_sen < 10000): #short_seq_prob
-            target_seq_length = random.randint(2, max_num_tokens)
+            target_seq_length = random.randint(4, max_num_tokens)
         
         i = 0
         current_chunk = []
@@ -117,17 +117,17 @@ def generate_processed_sentence(total_dataset, tokenizer, write_file):
                     is_random_next = False
                     if len(current_chunk) == 1 or random.random() < 0.5:
                         is_random_next = True
-                        target_b_length = max(1, target_seq_length - len(tokens_a))
+                        target_b_length = max(2, target_seq_length - len(tokens_a))
                         
                         for _ in range(1000000):
                             random_document_index = random.randint(0, num_total_documents-1)
                             if random_document_index != doc_idx:
                                 random_doc = total_dataset[random_document_index]['text']
                                 random_doc = random_doc.split("\n")
-                                if len(random_doc) > 10:
+                                if len(random_doc) > 20:
                                     break
                         
-                        random_start = random.randint(0, len(random_doc)-5)
+                        random_start = random.randint(0, len(random_doc)-10)
                         for j in range(random_start, len(random_doc)):
                             random_doc_sen_ids = tokenizer.encode(random_doc[j]).ids
                             tokens_b.extend(random_doc_sen_ids)
@@ -171,11 +171,11 @@ def generate_processed_sentence(total_dataset, tokenizer, write_file):
                     )
                     # print(tokens, segment_ids, is_random_next, masked_lm_positions, masked_lm_labels)
                     pretraining_data = {"tokens": tokens,
-                           "segment_ids": segment_ids,
-                           "is_random_next": is_random_next,
-                           "masked_lm_positions": masked_lm_positions,
-                           "masked_lm_labels": masked_lm_labels
-                           }
+                                        "segment_ids": segment_ids,
+                                        "is_random_next": is_random_next,
+                                        "masked_lm_positions": masked_lm_positions,
+                                        "masked_lm_labels": masked_lm_labels
+                                        }
                     json.dump(pretraining_data, write_file)
                     write_file.write("\n")
                 current_chunk = []
@@ -193,7 +193,7 @@ def main():
     total_dataset = concatenate_datasets([wiki, bookcorpus])
     
     # total_dataset = total_dataset[1,2,3])
-    write_file = open('pretraining.json', 'w')
+    write_file = open('pretraining_1.json', 'w')
     generate_processed_sentence(total_dataset, tokenizer, write_file)
     write_file.close()
     # num_total_dataset = len(total_dataset)
