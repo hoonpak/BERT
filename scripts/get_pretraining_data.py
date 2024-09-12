@@ -106,7 +106,7 @@ def generate_processed_sentence(total_dataset, tokenizer, write_file):
             if (current_length >= target_seq_length) or (i == num_doc_sen-1):
                 if current_chunk:
                     a_end = 1
-                    if len(current_chunk) >= 2:
+                    if len(current_chunk) >= 3:
                         a_end = random.randint(1,len(current_chunk)-1)
                     
                     tokens_a = []
@@ -124,10 +124,10 @@ def generate_processed_sentence(total_dataset, tokenizer, write_file):
                             if random_document_index != doc_idx:
                                 random_doc = total_dataset[random_document_index]['text']
                                 random_doc = random_doc.split("\n")
-                                if len(random_doc) > 20:
+                                if len(random_doc) > 30:
                                     break
                         
-                        random_start = random.randint(0, len(random_doc)-10)
+                        random_start = random.randint(0, len(random_doc)-20)
                         for j in range(random_start, len(random_doc)):
                             random_doc_sen_ids = tokenizer.encode(random_doc[j]).ids
                             tokens_b.extend(random_doc_sen_ids)
@@ -193,7 +193,7 @@ def main():
     total_dataset = concatenate_datasets([wiki, bookcorpus])
     
     # total_dataset = total_dataset[1,2,3])
-    write_file = open('pretraining_1.json', 'w')
+    write_file = open('pretraining_4.json', 'w')
     generate_processed_sentence(total_dataset, tokenizer, write_file)
     write_file.close()
     # num_total_dataset = len(total_dataset)

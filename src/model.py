@@ -25,4 +25,5 @@ class PretrainingBERT(nn.Module):
         mlm_output = self.mlm_classifier(mlm_input)
         return nsp_output, mlm_output
     
-# class 
+# class GLEUBERT(nn.Module):
+    

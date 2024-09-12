@@ -2,7 +2,7 @@ import json
 import torch
 from torch.utils.data import IterableDataset
 
-class CustomDataset(IterableDataset):
+class PretrainingCustomDataset(IterableDataset):
     def __init__(self, file_path, world_size, rank, pad_idx):
         self.file_path = file_path
         self.world_size = world_size

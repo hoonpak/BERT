@@ -5,7 +5,7 @@ import time
 
 from config import *
 from tokenizers import Tokenizer
-from data import CustomDataset
+from data import PretrainingCustomDataset
 from model import PretrainingBERT
 from util import lrate
 
@@ -40,7 +40,7 @@ vocab_size = tokenizer.get_vocab_size()
 assert (vocab_size+1) == config_dict['vocab_size']
 
 pretraining_dataset_file_path = "../dataset/example_pretraining.json"
-pretraining_dataset = CustomDataset(pretraining_dataset_file_path, 1, 0, config_dict['pad_idx'])
+pretraining_dataset = PretrainingCustomDataset(pretraining_dataset_file_path, 1, 0, config_dict['pad_idx'])
 batch_size = 256
 train_dataloader = DataLoader(pretraining_dataset, batch_size)
 
@@ -63,18 +63,18 @@ train_stop_flag = False
 
 while True:
     epoch += 1
-    for tokens, segment_ids, position_ids, is_next, masked_lm_positions, masked_lm_labels in train_dataloader:
+    for tokens, segment_ids, is_next, masked_lm_positions, masked_lm_labels in train_dataloader:
         flag_batch_num += batch_size
         
         tokens = tokens.to(device)
         segment_ids = segment_ids.to(device)
-        position_ids = position_ids.to(device)
+        # position_ids = position_ids.to(device)
         is_next = is_next.to(device)
         masked_lm_positions = masked_lm_positions.to(device)
         masked_lm_labels = masked_lm_labels.to(device)
         
         model.train()
-        nsp_predict, mlm_predict = model.forward(tokens, segment_ids, position_ids, masked_lm_positions)
+        nsp_predict, mlm_predict = model.forward(tokens, segment_ids, masked_lm_positions)
         nsp_loss = nsp_loss_function(nsp_predict, is_next)
         mlm_loss = mlm_loss_function(mlm_predict, masked_lm_labels.reshape(-1))
         total_loss = nsp_loss + mlm_loss
