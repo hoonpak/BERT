@@ -1,4 +1,5 @@
 import json
+import time
 import torch
 from torch.utils.data import IterableDataset
 
@@ -8,8 +9,10 @@ class PretrainingCustomDataset(IterableDataset):
         self.world_size = world_size
         self.rank = rank
         self.pad_idx = pad_idx
+        st_time = time.time()
         self.total_lines = self._get_total_lines()
-
+        print("Calculate length of line...  ", time.strftime("%Hh %Mm %Ss",time.gmtime(time.time()-st_time)))
+        
     def _get_total_lines(self):
         with open(self.file_path, 'r') as f:
             return sum(1 for _ in f)

@@ -39,9 +39,9 @@ tokenizer = Tokenizer.from_file(tokenizer_file_path)
 vocab_size = tokenizer.get_vocab_size()
 assert (vocab_size+1) == config_dict['vocab_size']
 
+batch_size = 256
 pretraining_dataset_file_path = "../dataset/example_pretraining.json"
 pretraining_dataset = PretrainingCustomDataset(pretraining_dataset_file_path, 1, 0, config_dict['pad_idx'])
-batch_size = 256
 train_dataloader = DataLoader(pretraining_dataset, batch_size)
 
 model = PretrainingBERT(config_dict).to(device)
@@ -62,6 +62,10 @@ train_mlm_loss = 0
 train_stop_flag = False
 
 while True:
+    pretrain_data_number = (epoch % 5)
+    pretraining_dataset_file_path = f"../dataset/pretraining_{pretrain_data_number}.json"
+    pretraining_dataset = PretrainingCustomDataset(pretraining_dataset_file_path, 1, 0, config_dict['pad_idx'])
+    train_dataloader = DataLoader(pretraining_dataset, batch_size)
     epoch += 1
     for tokens, segment_ids, is_next, masked_lm_positions, masked_lm_labels in train_dataloader:
         flag_batch_num += batch_size
