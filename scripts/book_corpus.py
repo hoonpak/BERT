@@ -12,4 +12,4 @@ for file_path in tqdm(file_list):
         data.append({"text": file_content})
         
 dataset = Dataset.from_list(data)
-dataset.save_to_disk("/home/user19/bag/6.BERT/dataset")
+dataset.save_to_disk("../dataset")
