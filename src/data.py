@@ -1,7 +1,8 @@
+import os
 import json
 import time
 import torch
-from torch.utils.data import IterableDataset
+from torch.utils.data import IterableDataset, Dataset
 
 class PretrainingCustomDataset(IterableDataset):
     def __init__(self, file_path, world_size, rank, pad_idx):
@@ -11,7 +12,7 @@ class PretrainingCustomDataset(IterableDataset):
         self.pad_idx = pad_idx
         st_time = time.time()
         self.total_lines = self._get_total_lines()
-        print("Calculate length of line...  ", time.strftime("%Hh %Mm %Ss",time.gmtime(time.time()-st_time)))
+        print(f"Calculate length of line... : {self.total_lines} ", time.strftime("%Hh %Mm %Ss",time.gmtime(time.time()-st_time)))
         
     def _get_total_lines(self):
         with open(self.file_path, 'r') as f:
@@ -78,4 +79,284 @@ class PretrainingCustomDataset(IterableDataset):
         return [torch.LongTensor(tokens), torch.LongTensor(segment_ids), is_next,
                 torch.LongTensor(masked_lm_positions), torch.LongTensor(masked_lm_labels)]
         
-#torch.LongTensor(position_ids),
+class FinetuningCustomDataset(Dataset):
+    def __init__(self, extracted_data, label_encoder, cls_token_id, sep_token_id, pad_token_id):
+        self.train_data = extracted_data
+        self.label_encoder = label_encoder
+        self.cls_token_id = [cls_token_id]
+        self.sep_token_id = [sep_token_id]
+        self.pad_token_id = [pad_token_id]
+        
+    def __len__(self):
+        return len(self.train_data)
+    
+    def __getitem__(self, index):
+        data = self.train_data[index]
+        if len(data) == 2:
+            sentence, label = data
+            train_data = self.cls_token_id + sentence + self.sep_token_id
+        elif len(data) == 3:
+            sentence_a, sentence_b, label = data
+            train_data = self.cls_token_id + sentence_a + self.sep_token_id + sentence_b + self.sep_token_id
+        else:
+            raise ValueError("There is something wrong with data shape or size. That should be have 2 or 3 argument.")
+
+        pad_length = 128 - len(train_data)
+        train_data = train_data + pad_length*self.pad_token_id
+        if self.label_encoder:
+            label = self.label_encoder[label]
+        return train_data, label
+
+class GetDataFromFile:
+    def __init__(self, data_name, file_path, tokenizer):
+        self.tokenizer = tokenizer
+        
+        if data_name == 'mnli':
+            mnli_path_list = os.listdir(file_path)
+            train_data_path, = [os.path.join(file_path, name) for name in mnli_path_list if "train" in name]
+            dev_mat_data_path, = [os.path.join(file_path, name) for name in mnli_path_list if "dev_mat" in name]
+            dev_mis_data_path, = [os.path.join(file_path, name) for name in mnli_path_list if "dev_mis" in name]
+            
+            self.train_extracted_data, train_label_encoder = self.get_MNLI(train_data_path)
+            self.dev_mat_extracted_data, dev_mat_label_encoder = self.get_MNLI(dev_mat_data_path)
+            self.dev_mis_extracted_data, dev_mis_label_encoder = self.get_MNLI(dev_mis_data_path)
+            
+            if ((train_label_encoder.keys() != dev_mat_label_encoder.keys()) or 
+                (train_label_encoder.keys() != dev_mis_label_encoder.keys()) or
+                (dev_mat_label_encoder.keys() != dev_mis_label_encoder.keys())):
+                label_set = set(list(train_label_encoder.keys()) + list(dev_mat_label_encoder.keys()) + list(dev_mis_label_encoder.keys()))
+                self.label_encoder = dict()
+                for idx, label in enumerate(label_set):
+                    self.label_encoder[label] = idx
+            else:
+                self.label_encoder = train_label_encoder
+                
+        elif data_name == 'wnli':
+            path_list = os.listdir(file_path)
+            train_data_path, = [os.path.join(file_path, name) for name in path_list if "train" in name]
+            dev_data_path, = [os.path.join(file_path, name) for name in path_list if "dev" in name]
+            self.train_extracted_data = self.get_WNLI(train_data_path)
+            self.dev_extracted_data = self.get_WNLI(dev_data_path)
+            
+        elif data_name == 'cola':
+            path_list = os.listdir(file_path)
+            train_data_path, = [os.path.join(file_path, name) for name in path_list if "train" in name]
+            dev_data_path, = [os.path.join(file_path, name) for name in path_list if "dev" in name]
+            self.train_extracted_data = self.get_CoLA(train_data_path)
+            self.dev_extracted_data = self.get_CoLA(dev_data_path)
+            
+        elif data_name == 'mrpc':
+            path_list = os.listdir(file_path)
+            train_data_path, = [os.path.join(file_path, name) for name in path_list if "train" in name]
+            dev_data_path, = [os.path.join(file_path, name) for name in path_list if "_test" in name]
+            self.train_extracted_data = self.get_MRPC(train_data_path)
+            self.dev_extracted_data = self.get_MRPC(dev_data_path)
+        
+        elif data_name == 'rte':
+            path_list = os.listdir(file_path)
+            train_data_path, = [os.path.join(file_path, name) for name in path_list if "train" in name]
+            dev_data_path, = [os.path.join(file_path, name) for name in path_list if "dev" in name]
+            
+            self.train_extracted_data, train_label_encoder = self.get_RTE(train_data_path)
+            self.dev_extracted_data, dev_label_encoder = self.get_RTE(dev_data_path)
+            
+            if ((train_label_encoder.keys() != dev_label_encoder.keys())):
+                label_set = set(list(train_label_encoder.keys()) + list(dev_label_encoder.keys()))
+                self.label_encoder = dict()
+                for idx, label in enumerate(label_set):
+                    self.label_encoder[label] = idx
+            else:
+                self.label_encoder = train_label_encoder
+        
+        elif data_name == 'qqp':
+            path_list = os.listdir(file_path)
+            train_data_path, = [os.path.join(file_path, name) for name in path_list if "train" in name]
+            dev_data_path, = [os.path.join(file_path, name) for name in path_list if "dev" in name]
+            self.train_extracted_data = self.get_QQP(train_data_path)
+            self.dev_extracted_data = self.get_QQP(dev_data_path)
+
+        elif data_name == 'sst-2':
+            path_list = os.listdir(file_path)
+            train_data_path, = [os.path.join(file_path, name) for name in path_list if "train" in name]
+            dev_data_path, = [os.path.join(file_path, name) for name in path_list if "dev" in name]
+            self.train_extracted_data = self.get_SST2(train_data_path)
+            self.dev_extracted_data = self.get_SST2(dev_data_path)
+
+        elif data_name == 'qnli':
+            path_list = os.listdir(file_path)
+            train_data_path, = [os.path.join(file_path, name) for name in path_list if "train" in name]
+            dev_data_path, = [os.path.join(file_path, name) for name in path_list if "dev" in name]
+            
+            self.train_extracted_data, train_label_encoder = self.get_QNLI(train_data_path)
+            self.dev_extracted_data, dev_label_encoder = self.get_QNLI(dev_data_path)
+            
+            if ((train_label_encoder.keys() != dev_label_encoder.keys())):
+                label_set = set(list(train_label_encoder.keys()) + list(dev_label_encoder.keys()))
+                self.label_encoder = dict()
+                for idx, label in enumerate(label_set):
+                    self.label_encoder[label] = idx
+            else:
+                self.label_encoder = train_label_encoder
+
+        elif data_name == 'sts-b':
+            path_list = os.listdir(file_path)
+            train_data_path, = [os.path.join(file_path, name) for name in path_list if "train" in name]
+            dev_data_path, = [os.path.join(file_path, name) for name in path_list if "dev" in name]
+            self.train_extracted_data = self.get_STSB(train_data_path)
+            self.dev_extracted_data = self.get_STSB(dev_data_path)
+        
+                                
+    def get_MNLI(self, file_path):
+        with open(file_path, "r") as file:
+            data_lines = file.readlines()
+        extracted_data = []
+        label_encoder = dict()
+        idx = 0
+        for data_line in data_lines[1:]:
+            data_line_list = data_line.strip().split("\t")
+            sentence_a = self.tokenizer.encode(data_line_list[8]).ids
+            if len(sentence_a) > 125:
+                continue
+            sentence_b = self.tokenizer.encode(data_line_list[9]).ids
+            if len(sentence_a) + len(sentence_b) > 125:
+                continue
+            class_label = data_line_list[-1]
+            if class_label not in label_encoder.keys():
+                label_encoder[class_label] = idx
+                idx += 1
+            extracted_data.append((sentence_a, sentence_b, class_label))
+        return extracted_data, label_encoder
+
+    def get_WNLI(self, file_path):
+        with open(file_path, "r") as file:
+            data_lines = file.readlines()
+        extracted_data = []
+        for data_line in data_lines[1:]:
+            data_line_list = data_line.strip().split("\t")
+            sentence_a = self.tokenizer.encode(data_line_list[8]).ids
+            if len(sentence_a) > 125:
+                continue
+            sentence_b = self.tokenizer.encode(data_line_list[9]).ids
+            if len(sentence_a) + len(sentence_b) > 125:
+                continue
+            class_label = data_line_list[-1]
+            extracted_data.append((sentence_a, sentence_b, class_label))
+        return extracted_data
+    
+    def get_CoLA(self, file_path):
+        with open(file_path, "r") as file:
+            data_lines = file.readlines()
+        extracted_data = []
+        for data_line in data_lines:
+            data_line_list = data_line.strip().split("\t")
+            sentence = self.tokenizer.encode(data_line_list[-1]).ids
+            if len(sentence) > 125:
+                continue
+            class_label = data_line_list[1]
+            extracted_data.append((sentence, class_label))
+        return extracted_data
+
+    def get_MRPC(self, file_path):
+        with open(file_path, "r") as file:
+            data_lines = file.readlines()
+        extracted_data = []
+        for data_line in data_lines[1:]:
+            data_line_list = data_line.strip().split("\t")
+            sentence_a = self.tokenizer.encode(data_line_list[3]).ids
+            if len(sentence_a) > 125:
+                continue
+            sentence_b = self.tokenizer.encode(data_line_list[4]).ids
+            if len(sentence_a) + len(sentence_b) > 125:
+                continue
+            class_label = data_line_list[0]
+            extracted_data.append((sentence_a, sentence_b, class_label))
+        return extracted_data
+
+    def get_RTE(self, file_path):
+        with open(file_path, "r") as file:
+            data_lines = file.readlines()
+        extracted_data = []
+        label_encoder = dict()
+        idx = 0
+        for data_line in data_lines[1:]:
+            data_line_list = data_line.strip().split("\t")
+            sentence_a = self.tokenizer.encode(data_line_list[1]).ids
+            if len(sentence_a) > 125:
+                continue
+            sentence_b = self.tokenizer.encode(data_line_list[2]).ids
+            if len(sentence_a) + len(sentence_b) > 125:
+                continue
+            class_label = data_line_list[-1]
+            if class_label not in label_encoder.keys():
+                label_encoder[class_label] = idx
+                idx += 1
+            extracted_data.append((sentence_a, sentence_b, class_label))
+        return extracted_data, label_encoder
+
+    def get_QQP(self, file_path):
+        with open(file_path, "r") as file:
+            data_lines = file.readlines()
+        extracted_data = []
+        for data_line in data_lines[1:]:
+            data_line_list = data_line.strip().split("\t")
+            sentence_a = self.tokenizer.encode(data_line_list[3]).ids
+            if len(sentence_a) > 125:
+                continue
+            sentence_b = self.tokenizer.encode(data_line_list[4]).ids
+            if len(sentence_a) + len(sentence_b) > 125:
+                continue
+            class_label = data_line_list[-1]
+            extracted_data.append((sentence_a, sentence_b, class_label))
+        return extracted_data
+
+    def get_SST2(self, file_path):
+        with open(file_path, "r") as file:
+            data_lines = file.readlines()
+        extracted_data = []
+        for data_line in data_lines[1:]:
+            data_line_list = data_line.strip().split("\t")
+            sentence = self.tokenizer.encode(data_line_list[0]).ids
+            if len(sentence) > 125:
+                continue
+            class_label = data_line_list[-1]
+            extracted_data.append((sentence, class_label))
+        return extracted_data
+
+    def get_QNLI(self, file_path):
+        with open(file_path, "r") as file:
+            data_lines = file.readlines()
+        extracted_data = []
+        label_encoder = dict()
+        idx = 0
+        for data_line in data_lines[1:]:
+            data_line_list = data_line.strip().split("\t")
+            sentence_a = self.tokenizer.encode(data_line_list[1]).ids
+            if len(sentence_a) > 125:
+                continue
+            sentence_b = self.tokenizer.encode(data_line_list[2]).ids
+            if len(sentence_a) + len(sentence_b) > 125:
+                continue
+            class_label = data_line_list[-1]
+            if class_label not in label_encoder.keys():
+                label_encoder[class_label] = idx
+                idx += 1
+            extracted_data.append((sentence_a, sentence_b, class_label))
+        return extracted_data, label_encoder
+    
+    def get_STSB(self, file_path):
+        with open(file_path, "r") as file:
+            data_lines = file.readlines()
+        extracted_data = []
+        for data_line in data_lines[1:]:
+            data_line_list = data_line.strip().split("\t")
+            sentence_a = self.tokenizer.encode(data_line_list[-3]).ids
+            if len(sentence_a) > 125:
+                continue
+            sentence_b = self.tokenizer.encode(data_line_list[-2]).ids
+            if len(sentence_a) + len(sentence_b) > 125:
+                continue
+            class_label = data_line_list[-1]
+            extracted_data.append((sentence_a, sentence_b, class_label))
+        return extracted_data
+
+

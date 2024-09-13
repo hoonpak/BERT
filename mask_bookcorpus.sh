@@ -8,3 +8,4 @@ awk 'BEGIN {n=479} /isbn/ {n++} {print > "book" n ".txt"}' books_large_p2.txt
 rm books_large_p2.txt
 
 # tar -cjf pretraining_data.tar.bz2 pretraining.json
+# tar -xvjf filename.tar.bz2
