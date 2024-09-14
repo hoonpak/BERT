@@ -30,7 +30,7 @@ current_name = option.model + "_" + option.version
 
 data_path_names = ['SST-2', 'MRPC', "QQP", "QNLI", "RTE", "WNLI"]
 
-dataset_path = "/root/BERT/dataset/glue_data"
+dataset_path = "../dataset/glue_data"
 
 tokenizer_file_path = "../dataset/BERT_Tokenizer.json"
 tokenizer = Tokenizer.from_file(tokenizer_file_path)
