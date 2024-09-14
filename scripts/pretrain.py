@@ -45,7 +45,7 @@ batch_size = option.batchsize
 
 model = PretrainingBERT(config_dict).to(device)
 nsp_loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
-mlm_loss_function = torch.nn.CrossEntropyLoss(ignore_index=config_dict['pad_idx'], reduction='sum').to(device) #v2
+mlm_loss_function = torch.nn.CrossEntropyLoss(ignore_index=config_dict['pad_idx'], reduction='mean').to(device) #v2
 # mlm_loss_function = torch.nn.CrossEntropyLoss(reduction='sum').to(device) #v1
 optimizer = torch.optim.Adam(model.parameters(), lr=5e-5, betas=(0.9,0.999), weight_decay=0.01)
 # lr_update = LambdaLR(optimizer=optimizer, lr_lambda=lambda step: lrate(step, config_dict['dim_model'], 10000))
@@ -67,7 +67,7 @@ while True:
     pretrain_data_number = (epoch % 5)
     print(f"Preparing {pretrain_data_number} data...")
     pretraining_dataset_file_path = f"../dataset/pretraining_{pretrain_data_number}.json"
-    pretraining_dataset = PretrainingCustomDataset(pretraining_dataset_file_path, 1, 0, config_dict['pad_idx'])
+    pretraining_dataset = PretrainingCustomDataset(pretraining_dataset_file_path, 1, 0, tokenizer.token_to_id("[PAD]"))
     train_dataloader = DataLoader(pretraining_dataset, batch_size)
     epoch += 1
     for tokens, segment_ids, is_next, masked_lm_positions, masked_lm_labels in train_dataloader:
@@ -89,7 +89,7 @@ while True:
         iteration += 1
         train_nsp_loss += nsp_loss.detach().cpu().item()
         train_mlm_loss += mlm_loss.detach().cpu().item()
-        train_total_loss += total_loss.detach().cpu().item()
+        # train_total_loss += total_loss.detach().cpu().item()
         
         if flag_batch_num == step_batch_size:
             flag_batch_num = 0
@@ -99,14 +99,13 @@ while True:
             step += 1
             
             if step <= warmup_steps:
-                warmup_learning_rate = (5e-5)*(step/warmup_steps)
-                optimizer.param_groups[0]['lr'] = warmup_learning_rate
+                optimizer.param_groups[0]['lr'] = (5e-5)*(step/warmup_steps)
             else:
                 optimizer.param_groups[0]['lr'] = (5e-5)*(1-((step-warmup_steps)/(num_total_steps-warmup_steps)))
             
             if step % 1000 == 0:
                 train_nsp_loss /= iteration
-                train_mlm_loss /= iteration*step_batch_size*20
+                train_mlm_loss /= iteration
                 train_total_loss = train_nsp_loss + train_mlm_loss
                 iteration = 0
                 print(f"Step: {epoch}/{step:<8} lr: {optimizer.param_groups[0]['lr']:<9.1e} Train NSP Loss: {train_nsp_loss:<8.4f} Train MLM Loss: {train_mlm_loss:<8.4f} Train Loss: {train_total_loss:<8.4f} Time:{(time.time()-st_time)/3600:>6.4f} Hour")

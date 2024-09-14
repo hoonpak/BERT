@@ -68,9 +68,9 @@ class PretrainingCustomDataset(IterableDataset):
         tokens = tokens + [self.pad_idx]*pad_mul_num
         segment_ids = segment_ids + [2]*pad_mul_num
         
-        masked_pad_list = [self.pad_idx]*(20 - len(masked_lm_positions))
-        masked_lm_positions = masked_lm_positions + masked_pad_list
-        masked_lm_labels = masked_lm_labels + masked_pad_list
+        # masked_pad_list = [self.pad_idx]*(20 - len(masked_lm_positions))
+        masked_lm_positions = masked_lm_positions + [-1]*(20 - len(masked_lm_positions))
+        masked_lm_labels = masked_lm_labels + [self.pad_idx]*(20 - len(masked_lm_labels))
 
         is_next = 1
         if is_random_next:
@@ -95,21 +95,27 @@ class FinetuningCustomDataset(Dataset):
         if len(data) == 2:
             sentence, label = data
             train_data = self.cls_token_id + sentence + self.sep_token_id
+            segment_id = [0]*len(train_data)
         elif len(data) == 3:
             sentence_a, sentence_b, label = data
-            train_data = self.cls_token_id + sentence_a + self.sep_token_id + sentence_b + self.sep_token_id
+            train_data_a = self.cls_token_id + sentence_a + self.sep_token_id
+            train_data_b = sentence_b + self.sep_token_id
+            segment_id = [0]*len(train_data_a) + [1]*len(train_data_b)
+            train_data = train_data_a + train_data_b
         else:
             raise ValueError("There is something wrong with data shape or size. That should be have 2 or 3 argument.")
 
         pad_length = 128 - len(train_data)
         train_data = train_data + pad_length*self.pad_token_id
+        segment_id = segment_id + [2]*pad_length
         if self.label_encoder:
             label = self.label_encoder[label]
-        return train_data, label
+        return [torch.LongTensor(train_data), torch.LongTensor(segment_id), int(label)]
 
 class GetDataFromFile:
     def __init__(self, data_name, file_path, tokenizer):
         self.tokenizer = tokenizer
+        self.label_encoder = None
         
         if data_name == 'mnli':
             mnli_path_list = os.listdir(file_path)
@@ -117,19 +123,9 @@ class GetDataFromFile:
             dev_mat_data_path, = [os.path.join(file_path, name) for name in mnli_path_list if "dev_mat" in name]
             dev_mis_data_path, = [os.path.join(file_path, name) for name in mnli_path_list if "dev_mis" in name]
             
-            self.train_extracted_data, train_label_encoder = self.get_MNLI(train_data_path)
+            self.train_extracted_data, self.label_encoder = self.get_MNLI(train_data_path)
             self.dev_mat_extracted_data, dev_mat_label_encoder = self.get_MNLI(dev_mat_data_path)
             self.dev_mis_extracted_data, dev_mis_label_encoder = self.get_MNLI(dev_mis_data_path)
-            
-            if ((train_label_encoder.keys() != dev_mat_label_encoder.keys()) or 
-                (train_label_encoder.keys() != dev_mis_label_encoder.keys()) or
-                (dev_mat_label_encoder.keys() != dev_mis_label_encoder.keys())):
-                label_set = set(list(train_label_encoder.keys()) + list(dev_mat_label_encoder.keys()) + list(dev_mis_label_encoder.keys()))
-                self.label_encoder = dict()
-                for idx, label in enumerate(label_set):
-                    self.label_encoder[label] = idx
-            else:
-                self.label_encoder = train_label_encoder
                 
         elif data_name == 'wnli':
             path_list = os.listdir(file_path)
@@ -157,16 +153,8 @@ class GetDataFromFile:
             train_data_path, = [os.path.join(file_path, name) for name in path_list if "train" in name]
             dev_data_path, = [os.path.join(file_path, name) for name in path_list if "dev" in name]
             
-            self.train_extracted_data, train_label_encoder = self.get_RTE(train_data_path)
+            self.train_extracted_data, self.label_encoder = self.get_RTE(train_data_path)
             self.dev_extracted_data, dev_label_encoder = self.get_RTE(dev_data_path)
-            
-            if ((train_label_encoder.keys() != dev_label_encoder.keys())):
-                label_set = set(list(train_label_encoder.keys()) + list(dev_label_encoder.keys()))
-                self.label_encoder = dict()
-                for idx, label in enumerate(label_set):
-                    self.label_encoder[label] = idx
-            else:
-                self.label_encoder = train_label_encoder
         
         elif data_name == 'qqp':
             path_list = os.listdir(file_path)
@@ -187,16 +175,8 @@ class GetDataFromFile:
             train_data_path, = [os.path.join(file_path, name) for name in path_list if "train" in name]
             dev_data_path, = [os.path.join(file_path, name) for name in path_list if "dev" in name]
             
-            self.train_extracted_data, train_label_encoder = self.get_QNLI(train_data_path)
+            self.train_extracted_data, self.label_encoder = self.get_QNLI(train_data_path)
             self.dev_extracted_data, dev_label_encoder = self.get_QNLI(dev_data_path)
-            
-            if ((train_label_encoder.keys() != dev_label_encoder.keys())):
-                label_set = set(list(train_label_encoder.keys()) + list(dev_label_encoder.keys()))
-                self.label_encoder = dict()
-                for idx, label in enumerate(label_set):
-                    self.label_encoder[label] = idx
-            else:
-                self.label_encoder = train_label_encoder
 
         elif data_name == 'sts-b':
             path_list = os.listdir(file_path)

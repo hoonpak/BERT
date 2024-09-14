@@ -24,6 +24,20 @@ class PretrainingBERT(nn.Module):
         nsp_output = self.nsp_classifier(pooled_output)
         mlm_output = self.mlm_classifier(mlm_input)
         return nsp_output, mlm_output
+
+class ClassifierBERT(nn.Module):
+    def __init__(self, config, bert_layer, labels_num):
+        super(ClassifierBERT, self).__init__()
+        self.bert_layer = bert_layer
+        self.classifier = nn.Sequential(
+            nn.Dropout(p=config['hidden_dropout_prob']),
+            nn.Linear(in_features=config['dim_model'], out_features=labels_num)
+        )
+
+    def forward(self, batched_tokens, batched_segments):
+        bert_output, pooled_output = self.bert_layer(batched_tokens, batched_segments)
+        output = self.classifier(pooled_output)
+        return output
     
 # class GLEUBERT(nn.Module):
     
