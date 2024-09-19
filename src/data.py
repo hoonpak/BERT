@@ -80,7 +80,8 @@ class PretrainingCustomDataset(IterableDataset):
                 torch.LongTensor(masked_lm_positions), torch.LongTensor(masked_lm_labels)]
         
 class FinetuningCustomDataset(Dataset):
-    def __init__(self, extracted_data, label_encoder, cls_token_id, sep_token_id, pad_token_id):
+    def __init__(self, dataname, extracted_data, label_encoder, cls_token_id, sep_token_id, pad_token_id):
+        self.dataname = dataname
         self.train_data = extracted_data
         self.label_encoder = label_encoder
         self.cls_token_id = [cls_token_id]
@@ -108,9 +109,16 @@ class FinetuningCustomDataset(Dataset):
         pad_length = 128 - len(train_data)
         train_data = train_data + pad_length*self.pad_token_id
         segment_id = segment_id + [2]*pad_length
+        
         if self.label_encoder:
             label = self.label_encoder[label]
-        return [torch.LongTensor(train_data), torch.LongTensor(segment_id), int(label)]
+            
+        if self.dataname == "STS-B":
+            label = torch.FloatTensor([float(label)])
+        else:
+            label = int(label)
+        
+        return [torch.LongTensor(train_data), torch.LongTensor(segment_id), label]
 
 class GetDataFromFile:
     def __init__(self, data_name, file_path, tokenizer):
@@ -213,10 +221,10 @@ class GetDataFromFile:
         extracted_data = []
         for data_line in data_lines[1:]:
             data_line_list = data_line.strip().split("\t")
-            sentence_a = self.tokenizer.encode(data_line_list[8]).ids
+            sentence_a = self.tokenizer.encode(data_line_list[1]).ids
             if len(sentence_a) > 125:
                 continue
-            sentence_b = self.tokenizer.encode(data_line_list[9]).ids
+            sentence_b = self.tokenizer.encode(data_line_list[2]).ids
             if len(sentence_a) + len(sentence_b) > 125:
                 continue
             class_label = data_line_list[-1]
