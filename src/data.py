@@ -112,9 +112,9 @@ class FinetuningCustomDataset(Dataset):
         
         if self.label_encoder:
             label = self.label_encoder[label]
-            
+        
         if self.dataname == "STS-B":
-            label = torch.FloatTensor([float(label)])
+            label = torch.FloatTensor([label])
         else:
             label = int(label)
         
@@ -343,7 +343,7 @@ class GetDataFromFile:
             sentence_b = self.tokenizer.encode(data_line_list[-2]).ids
             if len(sentence_a) + len(sentence_b) > 125:
                 continue
-            class_label = data_line_list[-1]
+            class_label = float(data_line_list[-1])
             extracted_data.append((sentence_a, sentence_b, class_label))
         return extracted_data
 

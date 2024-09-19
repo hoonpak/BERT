@@ -33,6 +33,8 @@ class ClassifierBERT(nn.Module):
             nn.Dropout(p=config['hidden_dropout_prob']),
             nn.Linear(in_features=config['dim_model'], out_features=labels_num)
         )
+        truncated_normal_(self.classifier[1].weight)
+        self.classifier[1].bias.data.zero_()
 
     def forward(self, batched_tokens, batched_segments):
         bert_output, pooled_output = self.bert_layer(batched_tokens, batched_segments)
