@@ -52,36 +52,57 @@ class FeedForwardNetwork(nn.Module):
         output = self.outerlayer(intermediate)
         return output
 
-class BERTMultihead(nn.MultiheadAttention):
-    def __init__(self, embed_dim, num_heads, config, dropout=0, bias=True, add_bias_kv=False,
-                 add_zero_attn=False, kdim=None, vdim=None, batch_first=True, device=None, dtype=None) -> None:
-        super(BERTMultihead, self).__init__(embed_dim, num_heads, dropout, bias, add_bias_kv,
-                                            add_zero_attn, kdim, vdim, batch_first, device, dtype)
-        self.config = config
-        # The original MultiheadAttention in PyTorch was fixed by removing the self._reset_parameters() function.
-        self._reset_parameters()
-
-    def _reset_parameters(self):
-        if self._qkv_same_embed_dim:
-            truncated_normal_(self.in_proj_weight, mean=0.0, std=self.config['init_range'])
-        else:
-            truncated_normal_(self.q_proj_weight, mean=0.0, std=self.config['init_range'])
-            truncated_normal_(self.k_proj_weight, mean=0.0, std=self.config['init_range'])
-            truncated_normal_(self.v_proj_weight, mean=0.0, std=self.config['init_range'])
-
-        if self.in_proj_bias is not None:
-            nn.init.zeros_(self.in_proj_bias)
-            nn.init.zeros_(self.out_proj.bias)
-        if self.bias_k is not None:
-            truncated_normal_(self.bias_k, mean=0.0, std=self.config['init_range'])
-        if self.bias_v is not None:
-            truncated_normal_(self.bias_v, mean=0.0, std=self.config['init_range'])
+class MultiHeadAttention(nn.Module):
+    def __init__(self, config):
+        super(MultiHeadAttention, self).__init__()
+        assert config['dim_model'] % config['num_attention_heads'] == 0
+        self.WQ = nn.Linear(config['dim_model'], config['dim_model'], bias=True)
+        self.WK = nn.Linear(config['dim_model'], config['dim_model'], bias=True)
+        self.WV = nn.Linear(config['dim_model'], config['dim_model'], bias=True)
+        self.WO = nn.Linear(config['dim_model'], config['dim_model'], bias=True)
+        self.dropout = nn.Dropout(p=config['hidden_dropout_prob'])
+        
+        truncated_normal_(self.WQ.weight)
+        self.WQ.bias.data.zero_()
+        truncated_normal_(self.WK.weight)
+        self.WK.bias.data.zero_()
+        truncated_normal_(self.WV.weight)
+        self.WV.bias.data.zero_()
+        truncated_normal_(self.WO.weight)
+        self.WO.bias.data.zero_()
+        
+        self.head = config['num_attention_heads']
+        self.dim_model = config['dim_model']
+        self.d_k = config['dim_model']//config['num_attention_heads']
+        self.d_v = config['dim_model']//config['num_attention_heads']
+        self.scaler = torch.sqrt(torch.tensor(self.d_k))
+        
+    def forward(self, Query, Key, Value, masked_info):
+        """
+        **INPUT SHAPE**
+        masked_info - N, QL, L -> padding = True, else = False
+        """
+        QN, QL, QD = Query.shape
+        KN, KL, KD = Key.shape
+        VN, VL, VD = Value.shape
+        
+        query = self.WQ(Query).reshape(QN,QL,self.head,self.d_k).transpose(1,2) #N, L, D => N, L, H, D/H => N, H, L, D/H
+        key = self.WK(Key).reshape(KN,KL,self.head,self.d_k).transpose(1,2) #N, L, D => N, L, H, D/H => N, H, L, D/H
+        value = self.WV(Value).reshape(VN,VL,self.head,self.d_v).transpose(1,2) #N, L, D => N, L, H, D/H => N, H, L, D/H
+        
+        scaled_output = torch.matmul(query, key.transpose(-1,-2))/self.scaler #N, H, QL, D/H * N, H, D/H, L => N, H, QL, L
+        
+        # masked_info = masked_info.unsqueeze(1).repeat(1,self.head,1,1) #N, QL, L => N, H, QL, L
+        attn_score = scaled_output.masked_fill(masked_info, float("-inf")).softmax(-1).nan_to_num(0) #N, H, QL, L
+        attn_score = self.dropout(attn_score)
+        multi_outputs = torch.matmul(attn_score, value).transpose(1,2).reshape(VN, QL, self.d_model)  #N, H, QL, L * N, H, L, D/H => N, H, QL, D/H => N, QL, H, D/H => N, QL, D
+        output = self.WO(multi_outputs) #N, QL, d_m
+        return output
     
 class EncoderLayer(nn.Module):
     def __init__(self, config):
         super(EncoderLayer, self).__init__()
-        self.multihead_layer = BERTMultihead(embed_dim=config['dim_model'], num_heads=config['num_attention_heads'], config=config,
-                                             dropout=config['hidden_dropout_prob'], bias=True, batch_first=True)
+        self.multihead_layer = MultiHeadAttention(config)
         self.dropout_0 = nn.Dropout(p=config['hidden_dropout_prob'])
         self.layer_norm_0 = nn.LayerNorm(normalized_shape=config['dim_model'])
         self.ff_layer = FeedForwardNetwork(config)
@@ -94,7 +115,7 @@ class EncoderLayer(nn.Module):
         self.layer_norm_1.bias.data.zero_()
     
     def forward(self, input, mask_info):
-        mha_output, _ = self.multihead_layer(query=input, key=input, value=input, key_padding_mask=mask_info, need_weights=False)
+        mha_output, _ = self.multihead_layer(Query=input, Key=input, Value=input, masked_info=mask_info)
         ff_intput = self.layer_norm_0(self.dropout_0(mha_output)+input)
         ff_output = self.ff_layer(ff_intput)
         layer_output = self.layer_norm_1(self.dropout_1(ff_output)+ff_intput)
