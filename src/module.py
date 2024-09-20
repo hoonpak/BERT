@@ -11,19 +11,23 @@ class BERT(nn.Module):
         self.encoder_layers = nn.ModuleList([EncoderLayer(config) for _ in range(config['num_hidden_layers'])])
         self.pooling_layer = nn.Linear(in_features=config['dim_model'], out_features=config['dim_model'])
         self.tanh = nn.Tanh()
+        
+        truncated_normal_(self.pooling_layer.weight, mean=0.0, std=config['init_range'])
+        nn.init.zeros_(self.pooling_layer.bias)
+        
         self.padding_idx = config['pad_idx']
         self.head = config['num_attention_heads']
         
     def forward(self, batched_tokens, batched_segments):
-        mask_info = (batched_tokens != self.padding_idx).to(torch.float32) # padding got True value, so it ignore during computing attention.
+        mask_info = (batched_tokens != self.padding_idx).to(torch.float32) # padding got False value
         mask_info = torch.bmm(mask_info.unsqueeze(-1), mask_info.unsqueeze(1))
-        mask_info = (mask_info == 0)
-        mask_info = mask_info.unsqueeze(1).repeat(1,self.head,1,1) #N, QL, L => N, H, QL, L
+        mask_info = (mask_info == 0) # padding got True value, so it gonna ignore during computing attention.
+        mask_info = mask_info.unsqueeze(1).repeat(1,self.head,1,1) #N, L, L => N, H, L, L
         
         x = self.embedding_layer(batched_tokens, batched_segments)
         for enc_layer in self.encoder_layers:
             x = enc_layer.forward(input=x, mask_info=mask_info)
-        pooled_output = self.tanh(self.pooling_layer(x[:,0,:]))
+        pooled_output = self.tanh(self.pooling_layer(x[:,0,:])) #N, H
         return x, pooled_output
     
 class NextSentencePrediction(nn.Module):
@@ -65,4 +69,3 @@ class MaskedLanguageModeling(nn.Module):
         norm_masked_output = self.layer_norm(masked_output)
         cls_output = self.cls_layer(norm_masked_output).reshape(-1, self.vocab_size)
         return cls_output
-        

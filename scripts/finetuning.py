@@ -7,7 +7,7 @@ import pickle
 
 import torch
 from torch.utils.data import DataLoader
-from tokenizers import Tokenizer
+from transformers import BertTokenizerFast
 from sklearn.metrics import f1_score, accuracy_score
 from scipy.stats import pearsonr, spearmanr
 from data import FinetuningCustomDataset, GetDataFromFile
@@ -63,9 +63,9 @@ if __name__ == "__main__":
 
     dataset_path = "../dataset/glue_data"
 
-    tokenizer_file_path = "../dataset/BERT_Tokenizer.json"
-    tokenizer = Tokenizer.from_file(tokenizer_file_path)
-
+    tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased', use_fast=True)
+    pad_idx = tokenizer.convert_tokens_to_ids("[PAD]")
+    
     model_info = torch.load(f"../scripts/save_model/{current_name}_CheckPoint.pth", map_location="cpu")
     model = model_info['model']
     model.load_state_dict(model_info['model_state_dict'])
@@ -92,16 +92,16 @@ if __name__ == "__main__":
         
         if dataname == "MNLI":
             training_dataset = FinetuningCustomDataset(dataname, data_instance.train_extracted_data, data_instance.label_encoder, 
-                                                       tokenizer.token_to_id("[CLS]"), tokenizer.token_to_id("[SEP]"), tokenizer.token_to_id("[PAD]")) 
+                                                       tokenizer.convert_tokens_to_ids("[CLS]"), tokenizer.convert_tokens_to_ids("[SEP]"), pad_idx) 
             m_test_dataset = FinetuningCustomDataset(dataname, data_instance.dev_mat_extracted_data, data_instance.label_encoder, 
-                                                     tokenizer.token_to_id("[CLS]"), tokenizer.token_to_id("[SEP]"), tokenizer.token_to_id("[PAD]"))
+                                                     tokenizer.convert_tokens_to_ids("[CLS]"), tokenizer.convert_tokens_to_ids("[SEP]"), pad_idx)
             mm_test_dataset = FinetuningCustomDataset(dataname, data_instance.dev_mis_extracted_data, data_instance.label_encoder, 
-                                                      tokenizer.token_to_id("[CLS]"), tokenizer.token_to_id("[SEP]"), tokenizer.token_to_id("[PAD]"))
+                                                      tokenizer.convert_tokens_to_ids("[CLS]"), tokenizer.convert_tokens_to_ids("[SEP]"), pad_idx)
         else:
             training_dataset = FinetuningCustomDataset(dataname, data_instance.train_extracted_data, data_instance.label_encoder, 
-                                                       tokenizer.token_to_id("[CLS]"), tokenizer.token_to_id("[SEP]"), tokenizer.token_to_id("[PAD]"))
+                                                       tokenizer.convert_tokens_to_ids("[CLS]"), tokenizer.convert_tokens_to_ids("[SEP]"), pad_idx)
             test_dataset = FinetuningCustomDataset(dataname, data_instance.dev_extracted_data, data_instance.label_encoder, 
-                                                   tokenizer.token_to_id("[CLS]"), tokenizer.token_to_id("[SEP]"), tokenizer.token_to_id("[PAD]"))
+                                                   tokenizer.convert_tokens_to_ids("[CLS]"), tokenizer.convert_tokens_to_ids("[SEP]"), pad_idx)
         
         if len(data_instance.train_extracted_data[0]) == 2:
             _,cls_list = zip(*data_instance.train_extracted_data)

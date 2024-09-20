@@ -59,7 +59,7 @@ class PretrainingCustomDataset(IterableDataset):
         masked_lm_labels = data['masked_lm_labels']
         
         real_sen_token_num = len(tokens)
-        pad_mul_num = 128 - real_sen_token_num
+        pad_mul_num = 129 - real_sen_token_num
         
         # position_ids = torch.arange(real_sen_token_num)
         # pad_dim = (0, pad_mul_num)
@@ -202,10 +202,10 @@ class GetDataFromFile:
         idx = 0
         for data_line in data_lines[1:]:
             data_line_list = data_line.strip().split("\t")
-            sentence_a = self.tokenizer.encode(data_line_list[8]).ids
+            sentence_a = self.tokenizer.encode(data_line_list[8], add_special_tokens=False)
             if len(sentence_a) > 125:
                 continue
-            sentence_b = self.tokenizer.encode(data_line_list[9]).ids
+            sentence_b = self.tokenizer.encode(data_line_list[9], add_special_tokens=False)
             if len(sentence_a) + len(sentence_b) > 125:
                 continue
             class_label = data_line_list[-1]
@@ -221,10 +221,10 @@ class GetDataFromFile:
         extracted_data = []
         for data_line in data_lines[1:]:
             data_line_list = data_line.strip().split("\t")
-            sentence_a = self.tokenizer.encode(data_line_list[1]).ids
+            sentence_a = self.tokenizer.encode(data_line_list[1], add_special_tokens=False)
             if len(sentence_a) > 125:
                 continue
-            sentence_b = self.tokenizer.encode(data_line_list[2]).ids
+            sentence_b = self.tokenizer.encode(data_line_list[2], add_special_tokens=False)
             if len(sentence_a) + len(sentence_b) > 125:
                 continue
             class_label = data_line_list[-1]
@@ -237,7 +237,7 @@ class GetDataFromFile:
         extracted_data = []
         for data_line in data_lines:
             data_line_list = data_line.strip().split("\t")
-            sentence = self.tokenizer.encode(data_line_list[-1]).ids
+            sentence = self.tokenizer.encode(data_line_list[-1], add_special_tokens=False)
             if len(sentence) > 125:
                 continue
             class_label = data_line_list[1]
@@ -250,10 +250,10 @@ class GetDataFromFile:
         extracted_data = []
         for data_line in data_lines[1:]:
             data_line_list = data_line.strip().split("\t")
-            sentence_a = self.tokenizer.encode(data_line_list[3]).ids
+            sentence_a = self.tokenizer.encode(data_line_list[3], add_special_tokens=False)
             if len(sentence_a) > 125:
                 continue
-            sentence_b = self.tokenizer.encode(data_line_list[4]).ids
+            sentence_b = self.tokenizer.encode(data_line_list[4], add_special_tokens=False)
             if len(sentence_a) + len(sentence_b) > 125:
                 continue
             class_label = data_line_list[0]
@@ -268,10 +268,10 @@ class GetDataFromFile:
         idx = 0
         for data_line in data_lines[1:]:
             data_line_list = data_line.strip().split("\t")
-            sentence_a = self.tokenizer.encode(data_line_list[1]).ids
+            sentence_a = self.tokenizer.encode(data_line_list[1], add_special_tokens=False)
             if len(sentence_a) > 125:
                 continue
-            sentence_b = self.tokenizer.encode(data_line_list[2]).ids
+            sentence_b = self.tokenizer.encode(data_line_list[2], add_special_tokens=False)
             if len(sentence_a) + len(sentence_b) > 125:
                 continue
             class_label = data_line_list[-1]
@@ -287,10 +287,10 @@ class GetDataFromFile:
         extracted_data = []
         for data_line in data_lines[1:]:
             data_line_list = data_line.strip().split("\t")
-            sentence_a = self.tokenizer.encode(data_line_list[3]).ids
+            sentence_a = self.tokenizer.encode(data_line_list[3], add_special_tokens=False)
             if len(sentence_a) > 125:
                 continue
-            sentence_b = self.tokenizer.encode(data_line_list[4]).ids
+            sentence_b = self.tokenizer.encode(data_line_list[4], add_special_tokens=False)
             if len(sentence_a) + len(sentence_b) > 125:
                 continue
             class_label = data_line_list[-1]
@@ -303,7 +303,7 @@ class GetDataFromFile:
         extracted_data = []
         for data_line in data_lines[1:]:
             data_line_list = data_line.strip().split("\t")
-            sentence = self.tokenizer.encode(data_line_list[0]).ids
+            sentence = self.tokenizer.encode(data_line_list[0], add_special_tokens=False)
             if len(sentence) > 125:
                 continue
             class_label = data_line_list[-1]
@@ -318,10 +318,10 @@ class GetDataFromFile:
         idx = 0
         for data_line in data_lines[1:]:
             data_line_list = data_line.strip().split("\t")
-            sentence_a = self.tokenizer.encode(data_line_list[1]).ids
+            sentence_a = self.tokenizer.encode(data_line_list[1], add_special_tokens=False)
             if len(sentence_a) > 125:
                 continue
-            sentence_b = self.tokenizer.encode(data_line_list[2]).ids
+            sentence_b = self.tokenizer.encode(data_line_list[2], add_special_tokens=False)
             if len(sentence_a) + len(sentence_b) > 125:
                 continue
             class_label = data_line_list[-1]
@@ -337,10 +337,10 @@ class GetDataFromFile:
         extracted_data = []
         for data_line in data_lines[1:]:
             data_line_list = data_line.strip().split("\t")
-            sentence_a = self.tokenizer.encode(data_line_list[-3]).ids
+            sentence_a = self.tokenizer.encode(data_line_list[-3], add_special_tokens=False)
             if len(sentence_a) > 125:
                 continue
-            sentence_b = self.tokenizer.encode(data_line_list[-2]).ids
+            sentence_b = self.tokenizer.encode(data_line_list[-2], add_special_tokens=False)
             if len(sentence_a) + len(sentence_b) > 125:
                 continue
             class_label = float(data_line_list[-1])

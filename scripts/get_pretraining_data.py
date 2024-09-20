@@ -4,12 +4,20 @@ from config import small_config
 
 # import logging
 # logging.basicConfig(filename='get_pretraining_data.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+import warnings
+warnings.filterwarnings("ignore")
+
 import random
+import argparse
 import numpy as np
 from tqdm import tqdm
 from datasets import concatenate_datasets, load_dataset, load_from_disk, Dataset
-from tokenizers import Tokenizer
+# from tokenizers import Tokenizer
+from transformers import BertTokenizerFast
 import json
+
+
+# BERT 토크나이저 불러오기
 
 def truncated_seq_pair(tokens_a, tokens_b, max_num_tokens):
     while True:
@@ -80,9 +88,9 @@ def generate_processed_sentence(total_dataset, tokenizer, write_file):
     shuffling_idx = np.arange(num_total_documents).tolist()
     random.shuffle(shuffling_idx)
 
-    cls_token_id = tokenizer.token_to_id("[CLS]")
-    sep_token_id = tokenizer.token_to_id("[SEP]")
-    msk_token_id = tokenizer.token_to_id("[MASK]")
+    cls_token_id = tokenizer.convert_tokens_to_ids("[CLS]")
+    sep_token_id = tokenizer.convert_tokens_to_ids("[SEP]")
+    msk_token_id = tokenizer.convert_tokens_to_ids("[MASK]")
     
     for doc_idx in tqdm(shuffling_idx):
         doc = total_dataset[doc_idx]['text']
@@ -98,7 +106,7 @@ def generate_processed_sentence(total_dataset, tokenizer, write_file):
         current_chunk = []
         current_length = 0
         while i < num_doc_sen:
-            encoded_sen = tokenizer.encode(doc[i]).ids
+            encoded_sen = tokenizer.encode(doc[i], add_special_tokens=False)
             if len(encoded_sen) > 0:
                 current_chunk.append(encoded_sen)
                 current_length += len(encoded_sen)
@@ -129,7 +137,7 @@ def generate_processed_sentence(total_dataset, tokenizer, write_file):
                         
                         random_start = random.randint(0, len(random_doc)-20)
                         for j in range(random_start, len(random_doc)):
-                            random_doc_sen_ids = tokenizer.encode(random_doc[j]).ids
+                            random_doc_sen_ids = tokenizer.encode(random_doc[j], add_special_tokens=False)
                             tokens_b.extend(random_doc_sen_ids)
                             if len(tokens_b) > target_b_length:
                                 break
@@ -182,9 +190,10 @@ def generate_processed_sentence(total_dataset, tokenizer, write_file):
                 current_length = 0
             i += 1
         
-def main():
+def main(name):
     # logging.debug("Loading BERT tokenizer...")
-    tokenizer = Tokenizer.from_file("../dataset/BERT_Tokenizer.json")
+    # tokenizer = Tokenizer.from_file("../dataset/BERT_Tokenizer.json")
+    tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased', use_fast=True)
 
     # logging.debug("Loading datasets...")
     bookcorpus = load_from_disk("../dataset/bookcorpus")
@@ -193,7 +202,7 @@ def main():
     total_dataset = concatenate_datasets([wiki, bookcorpus])
     
     # total_dataset = total_dataset[1,2,3])
-    write_file = open('pretraining_4.json', 'w')
+    write_file = open(f'pretraining_{name}.json', 'w')
     generate_processed_sentence(total_dataset, tokenizer, write_file)
     write_file.close()
     # num_total_dataset = len(total_dataset)
@@ -207,4 +216,8 @@ def main():
     
     
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--name")
+    option = parser.parse_args()
+    name = option.name
+    main(name)

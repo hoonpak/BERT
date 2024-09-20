@@ -4,7 +4,7 @@ import argparse
 import time
 
 from config import *
-from tokenizers import Tokenizer
+from transformers import BertTokenizerFast
 from data import PretrainingCustomDataset
 from model import PretrainingBERT
 from util import lrate
@@ -35,21 +35,20 @@ step_batch_size = 256
 num_total_steps = 1000000
 warmup_steps = 10000
 
-tokenizer_file_path = "../dataset/BERT_Tokenizer.json"
-tokenizer = Tokenizer.from_file(tokenizer_file_path)
-vocab_size = tokenizer.get_vocab_size()
+tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased', use_fast=True)
+pad_idx = tokenizer.convert_tokens_to_ids("[PAD]")
+
+vocab_size = tokenizer.vocab_size
 print("Tokenizer READY !!!")
 assert (vocab_size) == config_dict['vocab_size']
 
 batch_size = option.batchsize
 
 model = PretrainingBERT(config_dict).to(device)
-nsp_loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
-mlm_loss_function = torch.nn.CrossEntropyLoss(ignore_index=config_dict['pad_idx'], reduction='mean').to(device) #v2
-# mlm_loss_function = torch.nn.CrossEntropyLoss(reduction='sum').to(device) #v1
-optimizer = torch.optim.Adam(model.parameters(), lr=5e-5, betas=(0.9,0.999), weight_decay=0.01)
-# lr_update = LambdaLR(optimizer=optimizer, lr_lambda=lambda step: lrate(step, config_dict['dim_model'], 10000))
-# lr_update = PolynomialLR(optimizer=optimizer, total_iters=num_total_steps, power=1.0)
+loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
+# nsp_loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
+# mlm_loss_function = torch.nn.CrossEntropyLoss(ignore_index=config_dict['pad_idx'], reduction='mean').to(device) #v2
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, betas=(0.9,0.999), weight_decay=0.01)
 print("Model READY !!!")
 
 writer = SummaryWriter(log_dir=f"./runs/{current_name}")
@@ -67,7 +66,7 @@ while True:
     pretrain_data_number = (epoch % 5)
     print(f"Preparing {pretrain_data_number} data...")
     pretraining_dataset_file_path = f"../dataset/pretraining_{pretrain_data_number}.json"
-    pretraining_dataset = PretrainingCustomDataset(pretraining_dataset_file_path, 1, 0, tokenizer.token_to_id("[PAD]"))
+    pretraining_dataset = PretrainingCustomDataset(pretraining_dataset_file_path, 1, 0, pad_idx)
     train_dataloader = DataLoader(pretraining_dataset, batch_size)
     epoch += 1
     for tokens, segment_ids, is_next, masked_lm_positions, masked_lm_labels in train_dataloader:
@@ -82,8 +81,8 @@ while True:
         
         model.train()
         nsp_predict, mlm_predict = model.forward(tokens, segment_ids, masked_lm_positions)
-        nsp_loss = nsp_loss_function(nsp_predict, is_next)
-        mlm_loss = mlm_loss_function(mlm_predict, masked_lm_labels.reshape(-1))
+        nsp_loss = loss_function(nsp_predict, is_next)
+        mlm_loss = loss_function(mlm_predict, masked_lm_labels.reshape(-1))
         total_loss = nsp_loss + mlm_loss
         total_loss.backward()
         iteration += 1
@@ -91,7 +90,7 @@ while True:
         train_mlm_loss += mlm_loss.detach().cpu().item()
         # train_total_loss += total_loss.detach().cpu().item()
         
-        if flag_batch_num == step_batch_size:
+        if step_batch_size <= flag_batch_num:
             flag_batch_num = 0
             optimizer.step()
             # lr_update.step()
@@ -99,11 +98,11 @@ while True:
             step += 1
             
             if step <= warmup_steps:
-                optimizer.param_groups[0]['lr'] = (5e-5)*(step/warmup_steps)
+                optimizer.param_groups[0]['lr'] = (1e-4)*(step/warmup_steps)
             else:
-                optimizer.param_groups[0]['lr'] = (5e-5)*(1-((step-warmup_steps)/(num_total_steps-warmup_steps)))
+                optimizer.param_groups[0]['lr'] = (1e-4)*(1-((step-warmup_steps)/(num_total_steps-warmup_steps)))
             
-            if step % 1000 == 0:
+            if step % 100 == 0:
                 train_nsp_loss /= iteration
                 train_mlm_loss /= iteration
                 train_total_loss = train_nsp_loss + train_mlm_loss
