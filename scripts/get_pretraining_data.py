@@ -2,8 +2,6 @@ import sys
 sys.path.append("../src")
 from config import small_config
 
-# import logging
-# logging.basicConfig(filename='get_pretraining_data.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -12,12 +10,8 @@ import argparse
 import numpy as np
 from tqdm import tqdm
 from datasets import concatenate_datasets, load_dataset, load_from_disk, Dataset
-# from tokenizers import Tokenizer
 from transformers import BertTokenizerFast
 import json
-
-
-# BERT 토크나이저 불러오기
 
 def truncated_seq_pair(tokens_a, tokens_b, max_num_tokens):
     while True:
@@ -149,17 +143,12 @@ def generate_processed_sentence(total_dataset, tokenizer, write_file):
                             tokens_b.extend(current_chunk[j])
                     truncated_seq_pair(tokens_a, tokens_b, max_num_tokens)
                     
-                    # print("="*100)
-                    # print(len(current_chunk))
-                    # print(len(tokens_a))
-                    # print(len(tokens_b))
-                    
                     assert len(tokens_a) >= 1
                     assert len(tokens_b) >= 1
                     
                     tokens = []
                     segment_ids = []
-                    tokens.append(cls_token_id) # 그러면 special token도 masking 되는건가?
+                    tokens.append(cls_token_id)
                     segment_ids.append(0)
                     for token in tokens_a:
                         tokens.append(token)
@@ -177,7 +166,7 @@ def generate_processed_sentence(total_dataset, tokenizer, write_file):
                     (tokens, masked_lm_positions, masked_lm_labels) = create_masked_lm_prediction(
                         tokens, 0.15, 20, cls_token_id, sep_token_id, msk_token_id
                     )
-                    # print(tokens, segment_ids, is_random_next, masked_lm_positions, masked_lm_labels)
+
                     pretraining_data = {"tokens": tokens,
                                         "segment_ids": segment_ids,
                                         "is_random_next": is_random_next,
@@ -191,29 +180,16 @@ def generate_processed_sentence(total_dataset, tokenizer, write_file):
             i += 1
         
 def main(name):
-    # logging.debug("Loading BERT tokenizer...")
-    # tokenizer = Tokenizer.from_file("../dataset/BERT_Tokenizer.json")
     tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased', use_fast=True)
 
-    # logging.debug("Loading datasets...")
     bookcorpus = load_from_disk("../dataset/bookcorpus")
     wiki = load_dataset("wikipedia", "20220301.en", split="train", trust_remote_code=True)
     wiki = wiki.remove_columns([col for col in wiki.column_names if col != "text"])
     total_dataset = concatenate_datasets([wiki, bookcorpus])
     
-    # total_dataset = total_dataset[1,2,3])
     write_file = open(f'pretraining_{name}.json', 'w')
     generate_processed_sentence(total_dataset, tokenizer, write_file)
     write_file.close()
-    # num_total_dataset = len(total_dataset)
-    # jump = num_total_dataset//100
-    # shuffling_idx = np.arange(num_total_dataset).tolist()
-    # random.shuffle(shuffling_idx)
-    # for name_i, doc_idx_ss in enumerate(range(0,num_total_dataset,jump)):
-    #     selected_dataset = total_datasetshuffling_idx[doc_idx_ss:doc_idx_ss+jump])
-    #     pretraining_dataset = Dataset.from_generator(lambda: generate_processed_sentence(selected_dataset, tokenizer))
-    #     pretraining_dataset.save_to_disk(f"../dataset/pretraining_data/{name_i}_data")
-    
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
