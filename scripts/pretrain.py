@@ -103,7 +103,7 @@ while True:
             else:
                 optimizer.param_groups[0]['lr'] = (learning_rate)*(1-((step-warmup_steps)/(num_total_steps-warmup_steps)))
             
-            if step % 100 == 0:
+            if step % 1000 == 0:
                 train_nsp_loss /= iteration
                 train_mlm_loss /= iteration
                 train_total_loss = train_nsp_loss + train_mlm_loss
