@@ -46,9 +46,9 @@ assert (vocab_size) == config_dict['vocab_size']
 batch_size = option.batchsize
 
 model = PretrainingBERT(config_dict).to(device)
-# loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
-nsp_loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
-mlm_loss_function = torch.nn.CrossEntropyLoss(ignore_index=config_dict['pad_idx'], reduction='mean').to(device) #v2
+loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
+# nsp_loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
+# mlm_loss_function = torch.nn.CrossEntropyLoss(ignore_index=config_dict['pad_idx'], reduction='mean').to(device) #v2
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9,0.999), weight_decay=0.01)
 print("Model READY !!!")
 
@@ -82,8 +82,8 @@ while True:
         
         model.train()
         nsp_predict, mlm_predict = model.forward(tokens, segment_ids, masked_lm_positions)
-        nsp_loss = nsp_loss_function(nsp_predict, is_next)
-        mlm_loss = mlm_loss_function(mlm_predict, masked_lm_labels.reshape(-1))
+        nsp_loss = loss_function(nsp_predict, is_next)
+        mlm_loss = loss_function(mlm_predict, masked_lm_labels.reshape(-1))
         total_loss = nsp_loss + mlm_loss
         total_loss.backward()
         iteration += 1
