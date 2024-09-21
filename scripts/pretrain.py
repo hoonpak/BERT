@@ -34,6 +34,7 @@ print(f"{current_name} READY !!!")
 step_batch_size = 256
 num_total_steps = 1000000
 warmup_steps = 10000
+learning_rate = 1e-4
 
 tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased', use_fast=True)
 pad_idx = tokenizer.convert_tokens_to_ids("[PAD]")
@@ -45,10 +46,10 @@ assert (vocab_size) == config_dict['vocab_size']
 batch_size = option.batchsize
 
 model = PretrainingBERT(config_dict).to(device)
-loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
-# nsp_loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
-# mlm_loss_function = torch.nn.CrossEntropyLoss(ignore_index=config_dict['pad_idx'], reduction='mean').to(device) #v2
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, betas=(0.9,0.999), weight_decay=0.01)
+# loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
+nsp_loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
+mlm_loss_function = torch.nn.CrossEntropyLoss(ignore_index=config_dict['pad_idx'], reduction='mean').to(device) #v2
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9,0.999), weight_decay=0.01)
 print("Model READY !!!")
 
 writer = SummaryWriter(log_dir=f"./runs/{current_name}")
@@ -63,9 +64,9 @@ train_mlm_loss = 0
 train_stop_flag = False
 
 while True:
-    pretrain_data_number = (epoch % 5)
+    pretrain_data_number = (epoch % 6)
     print(f"Preparing {pretrain_data_number} data...")
-    pretraining_dataset_file_path = f"../dataset/pretraining_{pretrain_data_number}.json"
+    pretraining_dataset_file_path = f"pretraining_{pretrain_data_number}.json"
     pretraining_dataset = PretrainingCustomDataset(pretraining_dataset_file_path, 1, 0, pad_idx)
     train_dataloader = DataLoader(pretraining_dataset, batch_size)
     epoch += 1
@@ -81,8 +82,8 @@ while True:
         
         model.train()
         nsp_predict, mlm_predict = model.forward(tokens, segment_ids, masked_lm_positions)
-        nsp_loss = loss_function(nsp_predict, is_next)
-        mlm_loss = loss_function(mlm_predict, masked_lm_labels.reshape(-1))
+        nsp_loss = nsp_loss_function(nsp_predict, is_next)
+        mlm_loss = mlm_loss_function(mlm_predict, masked_lm_labels.reshape(-1))
         total_loss = nsp_loss + mlm_loss
         total_loss.backward()
         iteration += 1
@@ -98,9 +99,9 @@ while True:
             step += 1
             
             if step <= warmup_steps:
-                optimizer.param_groups[0]['lr'] = (1e-4)*(step/warmup_steps)
+                optimizer.param_groups[0]['lr'] = (learning_rate)*(step/warmup_steps)
             else:
-                optimizer.param_groups[0]['lr'] = (1e-4)*(1-((step-warmup_steps)/(num_total_steps-warmup_steps)))
+                optimizer.param_groups[0]['lr'] = (learning_rate)*(1-((step-warmup_steps)/(num_total_steps-warmup_steps)))
             
             if step % 100 == 0:
                 train_nsp_loss /= iteration
