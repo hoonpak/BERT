@@ -106,7 +106,7 @@ class FinetuningCustomDataset(Dataset):
         else:
             raise ValueError("There is something wrong with data shape or size. That should be have 2 or 3 argument.")
 
-        pad_length = 128 - len(train_data)
+        pad_length = 129 - len(train_data)
         train_data = train_data + pad_length*self.pad_token_id
         segment_id = segment_id + [2]*pad_length
         

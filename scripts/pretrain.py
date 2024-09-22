@@ -2,6 +2,8 @@ import sys
 sys.path.append("../src")
 import argparse
 import time
+import warnings
+warnings.filterwarnings("ignore")
 
 from config import *
 from transformers import BertTokenizerFast
@@ -46,10 +48,10 @@ assert (vocab_size) == config_dict['vocab_size']
 batch_size = option.batchsize
 
 model = PretrainingBERT(config_dict).to(device)
-loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
-# nsp_loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
-# mlm_loss_function = torch.nn.CrossEntropyLoss(ignore_index=config_dict['pad_idx'], reduction='mean').to(device) #v2
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9,0.999), weight_decay=0.01)
+# loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
+nsp_loss_function = torch.nn.CrossEntropyLoss(reduction='mean').to(device)
+mlm_loss_function = torch.nn.CrossEntropyLoss(ignore_index=config_dict['pad_idx'], reduction='mean').to(device) #v2
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, betas=(0.9,0.999), weight_decay=0.01, eps=1e-6)
 print("Model READY !!!")
 
 writer = SummaryWriter(log_dir=f"./runs/{current_name}")
@@ -82,8 +84,8 @@ while True:
         
         model.train()
         nsp_predict, mlm_predict = model.forward(tokens, segment_ids, masked_lm_positions)
-        nsp_loss = loss_function(nsp_predict, is_next)
-        mlm_loss = loss_function(mlm_predict, masked_lm_labels.reshape(-1))
+        nsp_loss = nsp_loss_function(nsp_predict, is_next)
+        mlm_loss = mlm_loss_function(mlm_predict, masked_lm_labels.reshape(-1))
         total_loss = nsp_loss + mlm_loss
         total_loss.backward()
         iteration += 1
@@ -93,15 +95,17 @@ while True:
         
         if step_batch_size <= flag_batch_num:
             flag_batch_num = 0
-            optimizer.step()
-            # lr_update.step()
-            optimizer.zero_grad()
-            step += 1
             
             if step <= warmup_steps:
                 optimizer.param_groups[0]['lr'] = (learning_rate)*(step/warmup_steps)
             else:
                 optimizer.param_groups[0]['lr'] = (learning_rate)*(1-((step-warmup_steps)/(num_total_steps-warmup_steps)))
+            
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
+            # lr_update.step()
+            optimizer.zero_grad()
+            step += 1
             
             if step % 1000 == 0:
                 train_nsp_loss /= iteration
