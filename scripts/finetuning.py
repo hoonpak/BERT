@@ -41,6 +41,63 @@ def test_acc_f1(test_dataloader, dataname, batch_size, optimizer, st_time):
 
     return test_acc, test_f1
 
+def early_stopping(dataname, modelname, test_acc, test_f1):
+    if modelname == "tiny": #83.2	81.1/71.1	74.3/73.6	62.2/83.4	70.2	70.3	81.5	57.2	62.3
+        if dataname == "SST-2":
+            if test_acc >= 83.2:
+                return True 
+        elif dataname == "MRPC":
+            if (test_acc >= 81.1) & (test_f1 >= 71.1):
+                return True
+        elif dataname == "STS-B":
+            if (test_acc >= 74.3) & (test_f1 >= 73.6):
+                return True
+        elif dataname == "QQP":
+            if (test_acc >= 62.2) & (test_f1 >= 83.4):
+                return True
+        elif dataname == "MNLI":
+            if (test_acc[0] >= 70.2) & (test_acc[1] >= 70.3):
+                return True
+        elif dataname == "QNLI":
+            if (test_acc >= 81.5):
+                return True
+        elif dataname == "RTE":
+            if (test_acc >= 57.2):
+                return True
+        elif dataname == "WNLI":
+            if (test_acc >= 62.3):
+                return True
+            
+    if modelname == "small": #89.7	83.4/76.2	78.8/77.0	68.1/87.0	77.6	77	86.4	61.8	62.3    27.8
+        if dataname == "SST-2":
+            if test_acc >= 89.7:
+                return True 
+        elif dataname == "MRPC":
+            if (test_acc >= 83.4) & (test_f1 >= 76.2):
+                return True
+        elif dataname == "STS-B":
+            if (test_acc >= 78.8) & (test_f1 >= 77.0):
+                return True
+        elif dataname == "QQP":
+            if (test_acc >= 68.1) & (test_f1 >= 87.0):
+                return True
+        elif dataname == "MNLI":
+            if (test_acc[0] >= 77.6) & (test_acc[1] >= 77):
+                return True
+        elif dataname == "QNLI":
+            if (test_acc >= 86.4):
+                return True
+        elif dataname == "RTE":
+            if (test_acc >= 61.8):
+                return True
+        elif dataname == "WNLI":
+            if (test_acc >= 62.3):
+                return True
+        elif dataname == "CoLA":
+            if (test_acc >= 27.8):
+                return True
+    return False
+    
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
@@ -60,11 +117,16 @@ if __name__ == "__main__":
 
     # data_path_names = ["SST-2", "MRPC", "STS-B", "QQP", "MNLI", "QNLI", "RTE", "WNLI", "CoLA"]
     if option.name == "0":
-        data_path_names = ["CoLA", "SST-2", "MRPC", "STS-B"]
+        if option.model == "tiny":
+            data_path_names = ["SST-2", "MRPC", "STS-B"]
+        else:
+            data_path_names = ["CoLA", "SST-2", "MRPC", "STS-B"]
     elif option.name == "1":
         data_path_names = ["QQP"]
+    elif option.name == "2":
+        data_path_names = ["MNLI"]
     else:
-        data_path_names = ["MNLI", "QNLI", "RTE", "WNLI"]
+        data_path_names = ["QNLI", "RTE", "WNLI"]
         # data_path_names = ["CoLA"]
 
     dataset_path = "../dataset/glue_data"
@@ -82,7 +144,8 @@ if __name__ == "__main__":
     #     param.requires_grad = True
 
     max_epochs = 4
-    batch_sizes = [8, 16, 32, 64, 128]
+    # batch_sizes = [8, 16, 32, 64, 128]
+    batch_sizes = [128, 64, 32, 16, 8]
     # batch_sizes = [8, 16, 32]
     # batch_sizes = [64, 128]
     learning_rates = [3e-4, 1e-4, 5e-5, 3e-5]
@@ -98,7 +161,7 @@ if __name__ == "__main__":
     st_time = time.time()
     results = dict()
     for dataname in data_path_names:
-        print("#"*50,f"{dataname} TRAINING START!!!!!","#"*50)
+        print("="*40,f"{dataname} TRAINING START!!!!!","="*40)
         sub_results = dict()
         data_path = os.path.join(dataset_path, dataname)
         data_instance = GetDataFromFile(dataname.lower(), data_path, tokenizer)
@@ -129,7 +192,7 @@ if __name__ == "__main__":
             
         for batch_size, learning_rate in cases:
             sub_key = str(batch_size) + "_" + str(learning_rate)
-            print("$"*43,f"{sub_key} case...","$"*43)
+            print("$"*44,f"{sub_key} case...","$"*44)
             training_dataloader = DataLoader(training_dataset, batch_size, True)
             if dataname == "MNLI":
                 m_test_dataloader = DataLoader(m_test_dataset, batch_size, False)        
@@ -242,9 +305,9 @@ if __name__ == "__main__":
                     preds = [x for xx in preds for x in xx]
                     labels = [x for xx in labels for x in xx]
                     pearson,_ = pearsonr(labels, preds)
-                    pearson = pearson*50+50
+                    pearson = pearson*100
                     spearman,_ = spearmanr(labels, preds)
-                    spearman = spearman*50+50
+                    spearman = spearman*100
                     cur_time = time.strftime("%Hh %Mm %Ss",time.gmtime(time.time()-st_time))
                     print(f"Data: {dataname:<6} batch size: {batch_size:<3} lr: {optimizer.param_groups[0]['lr']:<7.1e} Test pearson: {pearson:<6.2f} Test spearman: {spearman:<6.2f} Time:{cur_time}")
                     test_acc = pearson
@@ -275,6 +338,8 @@ if __name__ == "__main__":
                     test_acc, test_f1 = test_acc_f1(test_dataloader, dataname, batch_size, optimizer, st_time)
             
             sub_results[sub_key] = (test_acc, test_f1)
+            if early_stopping(dataname, option.model, test_acc, test_f1):
+                break
         results[dataname] = sub_results
 
     print("#"*106)
