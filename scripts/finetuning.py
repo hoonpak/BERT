@@ -127,6 +127,7 @@ if __name__ == "__main__":
         data_path_names = ["MNLI"]
     else:
         data_path_names = ["QNLI", "RTE", "WNLI"]
+        # data_path_names = ["WNLI"]
         # data_path_names = ["CoLA"]
 
     dataset_path = "../dataset/glue_data"
@@ -144,8 +145,8 @@ if __name__ == "__main__":
     #     param.requires_grad = True
 
     max_epochs = 4
-    # batch_sizes = [8, 16, 32, 64, 128]
-    batch_sizes = [128, 64, 32, 16, 8]
+    batch_sizes = [8, 16, 32, 64, 128]
+    # batch_sizes = [128, 64, 32, 16, 8]
     # batch_sizes = [8, 16, 32]
     # batch_sizes = [64, 128]
     learning_rates = [3e-4, 1e-4, 5e-5, 3e-5]
@@ -203,7 +204,7 @@ if __name__ == "__main__":
             bert = deepcopy(model.bert_layer)
             clsmodel = ClassifierBERT(config_dict, bert, cls_num).to(device)
             optimizer = torch.optim.AdamW(clsmodel.parameters(), lr=learning_rate, eps=1e-6, weight_decay=0.01)
-            num_total_steps = training_dataset.__len__()*max_epochs
+            num_total_steps = round((training_dataset.__len__()/batch_size+1)*max_epochs)
             warmup_steps = round(num_total_steps*(0.1))
             
             if dataname == "STS-B":
@@ -226,9 +227,9 @@ if __name__ == "__main__":
                         else:
                             proportion = 1-((step-warmup_steps)/(num_total_steps-warmup_steps))
                             if proportion <= 0:
-                                optimizer.param_groups[0]['lr'] = 1e-7
+                                optimizer.param_groups[0]['lr'] = 1e-9
                             else:
-                                optimizer.param_groups[0]['lr'] = (learning_rate)*proportion
+                                optimizer.param_groups[0]['lr'] = learning_rate*proportion
                         
                         torch.nn.utils.clip_grad_norm_(clsmodel.parameters(), max_norm=1.0)
                         optimizer.step()
@@ -264,10 +265,9 @@ if __name__ == "__main__":
                         else:
                             proportion = 1-((step-warmup_steps)/(num_total_steps-warmup_steps))
                             if proportion <= 0:
-                                optimizer.param_groups[0]['lr'] = 1e-7
+                                optimizer.param_groups[0]['lr'] = 1e-9
                             else:
                                 optimizer.param_groups[0]['lr'] = (learning_rate)*proportion
-                        
                         torch.nn.utils.clip_grad_norm_(clsmodel.parameters(), max_norm=1.0)
                         optimizer.step()
                         optimizer.zero_grad()
